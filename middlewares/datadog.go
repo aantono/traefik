@@ -20,8 +20,7 @@ var datadogClient = dogstatsd.New("traefik.", kitlog.LoggerFunc(func(keyvals ...
 }))
 var datadogTicker *time.Ticker
 
-// DataDog is an Implementation for Metrics that exposes datadog metrics for the latency
-// and the number of requests partitioned by status code and method.
+// Datadog is an Implementation for Metrics that exposes datadog metrics for the latency and the number of requests partitioned by status code and method.
 type Datadog struct {
 	reqsCounter      metrics.Counter
 	latencyHistogram metrics.Histogram
@@ -35,6 +34,7 @@ func (dd *Datadog) getLatencyHistogram() metrics.Histogram {
 	return dd.latencyHistogram
 }
 
+// NewDataDog creates new instance of Datadog
 func NewDataDog(name string) *Datadog {
 	var m Datadog
 
@@ -52,10 +52,11 @@ func (dd *Datadog) handler() http.Handler {
 	})
 }
 
+// InitDatadogClient initializes metrics pusher and creates a datadogClient if not created already
 func InitDatadogClient(config *types.Datadog) *time.Ticker {
 	if datadogTicker == nil {
 		address := config.Address
-		if len(address == 0) {
+		if len(address) == 0 {
 			address = "localhost:8125"
 		}
 		pushInterval, err := time.ParseDuration(config.PushInterval)
@@ -72,6 +73,7 @@ func InitDatadogClient(config *types.Datadog) *time.Ticker {
 	return datadogTicker
 }
 
+// Stop stops internal datadogTicker which controls the pushing of metrics to DD Agent and resets it to `nil`
 func (dd *Datadog) Stop() {
 	datadogTicker.Stop()
 	datadogTicker = nil

@@ -8,6 +8,7 @@ import (
 	"text/template"
 	"time"
 
+	"bytes"
 	"github.com/BurntSushi/ty/fun"
 	"github.com/Sirupsen/logrus"
 	"github.com/cenk/backoff"
@@ -28,11 +29,14 @@ var _ provider.Provider = (*CatalogProvider)(nil)
 
 // CatalogProvider holds configurations of the Consul catalog provider.
 type CatalogProvider struct {
-	provider.BaseProvider `mapstructure:",squash"`
-	Endpoint              string `description:"Consul server endpoint"`
-	Domain                string `description:"Default domain used"`
-	Prefix                string `description:"Prefix used for Consul catalog tags"`
-	client                *api.Client
+	provider.BaseProvider      `mapstructure:",squash"`
+	Endpoint                   string `description:"Consul server endpoint"`
+	Domain                     string `description:"Default domain used"`
+	Prefix                     string `description:"Prefix used for Consul catalog tags"`
+	FrontEndRule               string `description:"Frontend rule used for Consul services"`
+	AllTagsConstraintFiltering bool   `description:"Should use all tags for constraint filtering"`
+	client                     *api.Client
+	frontEndRuleTemplate       *template.Template
 }
 
 type serviceUpdate struct {
@@ -163,6 +167,13 @@ func (p *CatalogProvider) healthyNodes(service string) (catalogUpdate, error) {
 	}, nil
 }
 
+func (p *CatalogProvider) getPrefixedName(name string) string {
+	if len(p.Prefix) > 0 {
+		return p.Prefix + "." + name
+	}
+	return name
+}
+
 func (p *CatalogProvider) getEntryPoints(list string) []string {
 	return strings.Split(list, ",")
 }
@@ -173,10 +184,27 @@ func (p *CatalogProvider) getBackend(node *api.ServiceEntry) string {
 
 func (p *CatalogProvider) getFrontendRule(service serviceUpdate) string {
 	customFrontendRule := p.getAttribute("frontend.rule", service.Attributes, "")
-	if customFrontendRule != "" {
-		return customFrontendRule
+	if customFrontendRule == "" {
+		customFrontendRule = p.FrontEndRule
 	}
-	return "Host:" + service.ServiceName + "." + p.Domain
+
+	t := p.frontEndRuleTemplate
+	t, _ = t.Parse(customFrontendRule)
+
+	templateObjects := struct {
+		ServiceName string
+		Domain      string
+		Attributes  []string
+	}{
+		ServiceName: service.ServiceName,
+		Domain:      p.Domain,
+		Attributes:  service.Attributes,
+	}
+
+	var buffer bytes.Buffer
+	t.Execute(&buffer, templateObjects)
+
+	return buffer.String()
 }
 
 func (p *CatalogProvider) getBackendAddress(node *api.ServiceEntry) string {
@@ -202,10 +230,22 @@ func (p *CatalogProvider) getBackendName(node *api.ServiceEntry, index int) stri
 }
 
 func (p *CatalogProvider) getAttribute(name string, tags []string, defaultValue string) string {
+	return p.getTag(p.getPrefixedName(name), tags, defaultValue)
+}
+
+func (p *CatalogProvider) hasTag(name string, tags []string) bool {
+	tag := p.getTag(name, tags, "=!=") // Very-very unlikely that a Consul tag would ever start with '=!='
+	return tag != "=!="
+}
+
+func (p *CatalogProvider) getTag(name string, tags []string, defaultValue string) string {
 	for _, tag := range tags {
-		if strings.Index(strings.ToLower(tag), p.Prefix+".") == 0 {
-			if kv := strings.SplitN(tag[len(p.Prefix+"."):], "=", 2); len(kv) == 2 && strings.ToLower(kv[0]) == strings.ToLower(name) {
-				return kv[1]
+		if strings.Index(strings.ToLower(tag), strings.ToLower(name)) == 0 {
+			if kv := strings.SplitN(tag, "=", 2); strings.ToLower(kv[0]) == strings.ToLower(name) {
+				if len(kv) == 2 {
+					return kv[1]
+				}
+				return kv[0]
 			}
 		}
 	}
@@ -213,11 +253,15 @@ func (p *CatalogProvider) getAttribute(name string, tags []string, defaultValue 
 }
 
 func (p *CatalogProvider) getContraintTags(tags []string) []string {
+	if p.AllTagsConstraintFiltering {
+		return tags
+	}
+
 	var list []string
 
 	for _, tag := range tags {
-		if strings.Index(strings.ToLower(tag), p.Prefix+".tags=") == 0 {
-			splitedTags := strings.Split(tag[len(p.Prefix+".tags="):], ",")
+		if strings.Index(strings.ToLower(tag), p.getPrefixedName("tags=")) == 0 {
+			splitedTags := strings.Split(tag[len(p.getPrefixedName("tags=")):], ",")
 			list = append(list, splitedTags...)
 		}
 	}
@@ -232,6 +276,8 @@ func (p *CatalogProvider) buildConfig(catalog []catalogUpdate) *types.Configurat
 		"getBackendName":       p.getBackendName,
 		"getBackendAddress":    p.getBackendAddress,
 		"getAttribute":         p.getAttribute,
+		"getTag":               p.getTag,
+		"hasTag":               p.hasTag,
 		"getEntryPoints":       p.getEntryPoints,
 		"hasMaxconnAttributes": p.hasMaxconnAttributes,
 	}
@@ -329,6 +375,16 @@ func (p *CatalogProvider) watch(configurationChan chan<- types.ConfigMessage, st
 	}
 }
 
+func (p *CatalogProvider) setupFrontEndTemplate() {
+	var FuncMap = template.FuncMap{
+		"getAttribute": p.getAttribute,
+		"getTag":       p.getTag,
+		"hasTag":       p.hasTag,
+	}
+	t := template.New("consul catalog frontend rule").Funcs(FuncMap)
+	p.frontEndRuleTemplate = t
+}
+
 // Provide allows the consul catalog provider to provide configurations to traefik
 // using the given configuration channel.
 func (p *CatalogProvider) Provide(configurationChan chan<- types.ConfigMessage, pool *safe.Pool, constraints types.Constraints) error {
@@ -340,6 +396,7 @@ func (p *CatalogProvider) Provide(configurationChan chan<- types.ConfigMessage, 
 	}
 	p.client = client
 	p.Constraints = append(p.Constraints, constraints...)
+	p.setupFrontEndTemplate()
 
 	pool.Go(func(stop chan bool) {
 		notify := func(err error, time time.Duration) {

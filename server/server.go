@@ -919,11 +919,13 @@ func newMetrics(globalConfig GlobalConfiguration, name string) middlewares.Metri
 	if metricsEnabled {
 		if globalConfig.Web.Metrics.Prometheus != nil {
 			metrics := middlewares.NewPrometheus(name, globalConfig.Web.Metrics.Prometheus)
+			log.Debug("Configured Prometheus Metrics")
 			return metrics
 		}
 		if globalConfig.Web.Metrics.Datadog != nil {
 			middlewares.InitDatadogClient(globalConfig.Web.Metrics.Datadog)
 			metrics := middlewares.NewDataDog(name)
+			log.Debugf("Configured DataDog Metrics pushing to %s once every %s", globalConfig.Web.Metrics.Datadog.Address, globalConfig.Web.Metrics.Datadog.PushInterval)
 			return metrics
 		}
 	}
