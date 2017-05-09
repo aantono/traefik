@@ -8,9 +8,12 @@ import (
 	"time"
 
 	"github.com/containous/flaeg"
+	"github.com/containous/mux"
 	"github.com/containous/traefik/healthcheck"
 	"github.com/containous/traefik/types"
 	"github.com/vulcand/oxy/roundrobin"
+	"net/http"
+	"github.com/containous/traefik/testhelpers"
 )
 
 type testLoadBalancer struct{}
@@ -25,6 +28,83 @@ func (lb *testLoadBalancer) UpsertServer(u *url.URL, options ...roundrobin.Serve
 
 func (lb *testLoadBalancer) Servers() []*url.URL {
 	return []*url.URL{}
+}
+
+func TestServerMultipleFrontendRules(t *testing.T) {
+	cases := []struct {
+		expression  string
+		requestURL  string
+		expectedURL string
+	}{
+		{
+			expression:  "Host:foo.bar",
+			requestURL:  "http://foo.bar",
+			expectedURL: "http://foo.bar",
+		},
+		{
+			expression:  "PathPrefix:/management;ReplacePath:/health",
+			requestURL:  "http://foo.bar/management",
+			expectedURL: "http://foo.bar/health",
+		},
+		{
+			expression:  "Host:foo.bar;AddPrefix:/blah",
+			requestURL:  "http://foo.bar/baz",
+			expectedURL: "http://foo.bar/blah/baz",
+		},
+		{
+			expression:  "PathPrefixStripRegex:/one/{two}/{three:[0-9]+}",
+			requestURL:  "http://foo.bar/one/some/12345/four",
+			expectedURL: "http://foo.bar/four",
+		},
+		{
+			expression:  "PathPrefixStripRegex:/one/{two}/{three:[0-9]+};AddPrefix:/zero",
+			requestURL:  "http://foo.bar/one/some/12345/four",
+			expectedURL: "http://foo.bar/zero/four",
+		},
+		{
+			expression:  "AddPrefix:/blah;ReplacePath:/baz",
+			requestURL:  "http://foo.bar/hello",
+			expectedURL: "http://foo.bar/baz",
+		},
+		{
+			expression:  "PathPrefixStrip:/management;ReplacePath:/health",
+			requestURL:  "http://foo.bar/management",
+			expectedURL: "http://foo.bar/health",
+		},
+	}
+
+	for _, test := range cases {
+		t.Run(test.expression, func(t *testing.T) {
+			router := mux.NewRouter()
+			route := router.NewRoute()
+			serverRoute := &serverRoute{route: route}
+			rules := &Rules{route: serverRoute}
+
+			expression := test.expression
+			routeResult, err := rules.Parse(expression)
+
+			if err != nil {
+				t.Fatalf("Error while building route for %s: %+v", expression, err)
+			}
+
+			request := testhelpers.MustNewRequest(test.requestURL)
+			routeMatch := routeResult.Match(request, &mux.RouteMatch{Route: routeResult})
+
+			if !routeMatch {
+				t.Fatalf("Rule %s don't match", expression)
+			}
+
+			server := new(Server)
+
+			server.wireFrontendBackend(serverRoute, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.String() != test.expectedURL {
+					t.Fatalf("Expected URL for [%s]: %s, got %s", test.expression, test.expectedURL, r.URL.String())
+				}
+				t.Logf("Received request to: %s", r.URL.String())
+			}))
+			serverRoute.route.GetHandler().ServeHTTP(nil, request)
+		})
+	}
 }
 
 func TestServerLoadConfigHealthCheckOptions(t *testing.T) {

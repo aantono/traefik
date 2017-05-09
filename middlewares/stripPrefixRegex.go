@@ -39,7 +39,9 @@ func (s *StripPrefixRegex) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		r.URL.Path = r.URL.Path[len(prefix.Path):]
+		newPath := r.URL.Path[len(prefix.Path):]
+		log.Debugf("Striping Path Prefix Regex %s from %s = %s", prefix.Path, r.URL.Path, newPath)
+		r.URL.Path = newPath
 		r.Header[forwardedPrefixHeader] = []string{prefix.Path}
 		r.RequestURI = r.URL.RequestURI()
 		s.Handler.ServeHTTP(w, r)
