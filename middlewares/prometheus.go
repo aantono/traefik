@@ -9,11 +9,6 @@ import (
 	"net/http"
 )
 
-const (
-	reqsName    = "traefik_requests_total"
-	latencyName = "traefik_request_duration_seconds"
-)
-
 // Prometheus is an Implementation for Metrics that exposes prometheus metrics for the latency
 // and the number of requests partitioned by status code and method.
 type Prometheus struct {
@@ -35,7 +30,7 @@ func NewPrometheus(name string, config *types.Prometheus) *Prometheus {
 
 	cv := stdprometheus.NewCounterVec(
 		stdprometheus.CounterOpts{
-			Name:        reqsName,
+			Name:        metricsReqsName,
 			Help:        "How many HTTP requests processed, partitioned by status code and method.",
 			ConstLabels: stdprometheus.Labels{"service": name},
 		},
@@ -62,7 +57,7 @@ func NewPrometheus(name string, config *types.Prometheus) *Prometheus {
 
 	hv := stdprometheus.NewHistogramVec(
 		stdprometheus.HistogramOpts{
-			Name:        latencyName,
+			Name:        metricsLatencyName,
 			Help:        "How long it took to process the request.",
 			ConstLabels: stdprometheus.Labels{"service": name},
 			Buckets:     buckets,

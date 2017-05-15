@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+const (
+	metricsReqsName    = "traefik_requests_total"
+	metricsLatencyName = "traefik_request_duration_seconds"
+)
+
 // Metrics is an Interface that must be satisfied by any system that
 // wants to expose and monitor metrics
 type Metrics interface {

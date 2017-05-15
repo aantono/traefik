@@ -47,11 +47,11 @@ func TestPrometheus(t *testing.T) {
 	n.ServeHTTP(recorder, req1)
 	n.ServeHTTP(recorder, req2)
 	body := recorder.Body.String()
-	if !strings.Contains(body, reqsName) {
-		t.Errorf("body does not contain request total entry '%s'", reqsName)
+	if !strings.Contains(body, metricsReqsName) {
+		t.Errorf("body does not contain request total entry '%s'", metricsReqsName)
 	}
-	if !strings.Contains(body, latencyName) {
-		t.Errorf("body does not contain request duration entry '%s'", latencyName)
+	if !strings.Contains(body, metricsLatencyName) {
+		t.Errorf("body does not contain request duration entry '%s'", metricsLatencyName)
 	}
 
 	// Register the same metrics again
@@ -73,7 +73,7 @@ func TestPrometheus(t *testing.T) {
 		assert func(*dto.MetricFamily)
 	}{
 		{
-			name: reqsName,
+			name: metricsReqsName,
 			labels: map[string]string{
 				"code":    "200",
 				"method":  "GET",
@@ -87,7 +87,7 @@ func TestPrometheus(t *testing.T) {
 			},
 		},
 		{
-			name: latencyName,
+			name: metricsLatencyName,
 			labels: map[string]string{
 				"service": "test",
 			},
