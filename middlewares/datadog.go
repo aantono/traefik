@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/containous/traefik/log"
+	"github.com/containous/traefik/types"
+	kitlog "github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/metrics"
 	"github.com/go-kit/kit/metrics/dogstatsd"
-	kitlog "github.com/go-kit/kit/log"
-	"github.com/containous/traefik/log"
 	"net/http"
 )
 
@@ -17,6 +18,7 @@ var datadogClient = dogstatsd.New("traefik.", kitlog.LoggerFunc(func(keyvals ...
 	log.Info(keyvals)
 	return nil
 }))
+var datadogTicker *time.Ticker
 
 // DataDog is an Implementation for Metrics that exposes datadog metrics for the latency
 // and the number of requests partitioned by status code and method.
@@ -50,14 +52,27 @@ func (dd *Datadog) handler() http.Handler {
 	})
 }
 
-func initDatadogClient(address string, pushInterval time.Duration) *time.Ticker {
-	report := time.NewTicker(pushInterval)
+func InitDatadogClient(config *types.Datadog) *time.Ticker {
+	if datadogTicker == nil {
+		address := config.Address
+		if len(address == 0) {
+			address = "localhost:8125"
+		}
+		pushInterval, err := time.ParseDuration(config.PushInterval)
+		if err != nil {
+			pushInterval = 10 * time.Second
+		}
 
-	go datadogClient.SendLoop(report.C, "udp", address)
+		report := time.NewTicker(pushInterval)
 
-	return report
+		go datadogClient.SendLoop(report.C, "udp", address)
+
+		datadogTicker = report
+	}
+	return datadogTicker
 }
 
-func (dd *Datadog) Stop(report *time.Ticker) {
-	report.Stop()
+func (dd *Datadog) Stop() {
+	datadogTicker.Stop()
+	datadogTicker = nil
 }

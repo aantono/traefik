@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stvp/go-udp-testing"
 	"github.com/codegangsta/negroni"
+	"github.com/stvp/go-udp-testing"
 )
 
 func TestStatsD(t *testing.T) {
@@ -16,7 +16,7 @@ func TestStatsD(t *testing.T) {
 	// This is needed to make sure that UDP Listener listens for data a bit longer, otherwise it will quit after a millisecond
 	udp.Timeout = 5 * time.Second
 	recorder := httptest.NewRecorder()
-	ticker := initStatsdClient(":18125", 1 * time.Second)
+	ticker := initStatsdClient(":18125", 1*time.Second)
 
 	n := negroni.New()
 	c := NewStatsD("test")

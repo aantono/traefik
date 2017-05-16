@@ -372,6 +372,10 @@ func NewTraefikDefaultPointersConfiguration() *TraefikConfiguration {
 		Prometheus: &types.Prometheus{
 			Buckets: types.Buckets{0.1, 0.3, 1.2, 5},
 		},
+		Datadog: &types.Datadog{
+			Address:      "localhost:8125",
+			PushInterval: "10s",
+		},
 	}
 
 	// default Marathon

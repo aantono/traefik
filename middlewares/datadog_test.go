@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stvp/go-udp-testing"
 	"github.com/codegangsta/negroni"
+	"github.com/containous/traefik/types"
+	"github.com/stvp/go-udp-testing"
 )
 
 func TestDatadog(t *testing.T) {
@@ -16,11 +17,11 @@ func TestDatadog(t *testing.T) {
 	// This is needed to make sure that UDP Listener listens for data a bit longer, otherwise it will quit after a millisecond
 	udp.Timeout = 5 * time.Second
 	recorder := httptest.NewRecorder()
-	ticker := initDatadogClient(":18125", 1 * time.Second)
+	InitDatadogClient(&types.Datadog{":18125", "1s"})
 
 	n := negroni.New()
 	dd := NewDataDog("test")
-	defer dd.Stop(ticker)
+	defer dd.Stop()
 	metricsMiddlewareBackend := NewMetricsWrapper(dd)
 
 	n.Use(metricsMiddlewareBackend)
@@ -54,7 +55,7 @@ func TestDatadog(t *testing.T) {
 	udp.ShouldReceiveAll(t, expected, func() {
 		n.ServeHTTP(recorder, req1)
 		n.ServeHTTP(recorder, req2)
-//		body := recorder.Body.String()
+		//		body := recorder.Body.String()
 
 		//if !strings.Contains(body, ddReqsName) {
 		//	t.Errorf("body does not contain request total entry '%s'", ddReqsName)

@@ -2,13 +2,13 @@ package middlewares
 
 import (
 	"fmt"
-	"time"
 	"net/http"
+	"time"
 
+	"github.com/containous/traefik/log"
+	kitlog "github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/metrics"
 	"github.com/go-kit/kit/metrics/statsd"
-	kitlog "github.com/go-kit/kit/log"
-	"github.com/containous/traefik/log"
 )
 
 var _ Metrics = (Metrics)(nil)
