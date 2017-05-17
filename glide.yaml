@@ -103,9 +103,11 @@ import:
 - package: github.com/hashicorp/go-version
 - package: github.com/mvdan/xurls
 - package: github.com/prometheus/common
+  version: 13ba4ddd0caa9c28ca7b7bffe1dfa9ed8d5ef207
   subpackages:
   - model
 - package: github.com/prometheus/client_golang
+  version: v0.8.0
 - package: github.com/prometheus/client_model
   subpackages:
   - go
